@@ -10,7 +10,8 @@ tag: assignment, reading, history
 
 ## What it does
 
-- **Tag badges.** Each tag on a row shows as a slate badge with a tag symbol. Rows with more than three tags show three plus a "+2" badge. Done and canceled rows fade theirs.
+- **Multiple tags per row.** A row can carry as many tags as you like, stored together in one `tag` attribute as a comma list, and each shows as its own badge.
+- **Tag badges.** Each tag on a row shows as a badge with a tag symbol. Rows with more than three tags show three plus a "+2" badge. Done and canceled rows fade theirs.
 - **Click a tag** to show rows with that tag, remove it from the row, rename it everywhere, or add another tag.
 - **Add Tag (⌘⇧T).** Type to pick from tags you already use, or type a new one. Separate tags with commas to add several at once. Works on several selected rows too.
 - **Tags in the inspector.** Every tag with its row count. Click a tag to show its rows; click it again to clear. Hover a tag to rename it.
@@ -84,7 +85,7 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 ## Credits
 
-Built with Claude. I designed and tested it; Claude wrote the code.
+Built with Claude. I designed and tested it.
 
 ## License
 
