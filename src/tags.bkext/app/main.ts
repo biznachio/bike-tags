@@ -2,14 +2,17 @@ import {
   AppExtensionContext,
   AttributeChoice,
   BadgeEnvironment,
+  Color,
   CommandContext,
   Disposable,
   DOMScriptHandle,
   Image,
+  Insets,
   MenuItem,
   Outline,
   OutlineEditor,
   Row,
+  SymbolConfiguration,
   Text,
   Window,
 } from 'bike/app'
@@ -148,35 +151,80 @@ function registerReconcile() {
 
 // MARK: - Badge
 
-type PillMode = 'rest' | 'active' | 'closed'
+// Tag badges: a tag.fill symbol and the name in a rounded box with a soft
+// slate fill and a stroke in the same hue. Colors come from the active theme, so light and
+// dark resolve on their own; a theme can override any of the four by
+// defining `tag-fill`, `tag-stroke`, `tag-text` or `tag-icon`.
 
-function pill(env: BadgeEnvironment, tag: string, mode: PillMode): Image {
-  const bm = env.badgeMetrics
-  const accent = env.theme.colors.accent
-  const base = env.font.withPointSize(bm.fontSize)
-  const font = mode === 'active' ? base.withWeight('semibold') : base
-  const ink = mode === 'active' ? accent : env.color.alphaSet(mode === 'closed' ? 0.38 : 0.62)
-  const hash = mode === 'active' ? accent.alphaSet(0.7) : env.color.alphaSet(mode === 'closed' ? 0.25 : 0.38)
-  const fill = mode === 'active' ? accent.alphaSet(0.14) : env.color.alphaSet(mode === 'closed' ? 0.04 : 0.07)
-  return Image.fromText(new Text('#', font, hash))
-    .withHStack(Image.fromText(new Text(tag, font, ink)), 0.5)
-    .withBackground({ fill, cornerRadius: bm.cornerRadius, padding: bm.padding })
+type BadgeMode = 'rest' | 'active' | 'closed'
+
+type BadgeColors = { fill: Color; stroke?: Color; ink: Color; icon: Color }
+
+/** A cool blue-gray, mixed into the theme's own background and text. Made lazily, never at load. */
+let slate: Color | undefined
+function SLATE(): Color {
+  return (slate ??= Color.oklch(0.6, 0.05, 262))
 }
 
-function morePill(env: BadgeEnvironment, hidden: number): Image {
+function badgeColors(env: BadgeEnvironment, mode: BadgeMode): BadgeColors {
+  const colors = env.theme.colors
+  if (mode === 'active') {
+    // Solid accent with white text, as in the Tags inspector.
+    const accent = colors.accent
+    return { fill: accent, ink: Color.white(), icon: Color.white().mixed(accent, 0.15) }
+  }
+  const base: Required<BadgeColors> = {
+    fill: colors.get('tag-fill') ?? colors.background.mixed(SLATE(), 0.14),
+    stroke: colors.get('tag-stroke') ?? colors.background.mixed(SLATE(), 0.38),
+    ink: colors.get('tag-text') ?? colors.text.mixed(SLATE(), 0.32),
+    icon: colors.get('tag-icon') ?? colors.text.mixed(SLATE(), 0.62),
+  }
+  if (mode === 'rest') return base
+  // Done rows: blend halfway to the background rather than going
+  // translucent, so nothing Bike draws behind badges shows through.
+  const bg = colors.background
+  return {
+    fill: base.fill.mixed(bg, 0.5),
+    stroke: base.stroke.mixed(bg, 0.5),
+    ink: base.ink.mixed(bg, 0.5),
+    icon: base.icon.mixed(bg, 0.5),
+  }
+}
+
+function tagBox(env: BadgeEnvironment, content: Image, c: BadgeColors): Image {
   const bm = env.badgeMetrics
-  const font = env.font.withPointSize(bm.fontSize).withWeight('semibold')
-  return Image.fromText(new Text(`+${hidden}`, font, env.color.alphaSet(0.55))).withBackground({
-    stroke: env.color.alphaSet(0.22),
+  const p = bm.padding
+  return content.withBackground({
+    fill: c.fill,
+    // The filtered tag has no border; it would only match the fill.
+    stroke: c.stroke,
     strokeWidth: bm.strokeWidth,
+    // Bike's own badge radius, so the tag lines up with the match highlight
+    // Bike draws behind badges while filtering.
     cornerRadius: bm.cornerRadius,
-    padding: bm.padding,
+    padding: new Insets(p.top, p.right + 2, p.bottom, p.left + 1),
   })
+}
+
+function pill(env: BadgeEnvironment, tag: string, mode: BadgeMode): Image {
+  const c = badgeColors(env, mode)
+  const base = env.font.withPointSize(env.badgeMetrics.fontSize)
+  // Regular weight in every state, so filtering changes color, not heft.
+  const font = base
+  const symbol = Image.fromSymbol(new SymbolConfiguration('tag.fill').withFont(base).withSymbolScale('small').withPaletteColors([c.icon]))
+  return tagBox(env, symbol.withHStack(Image.fromText(new Text(tag, font, c.ink)), 3), c)
+}
+
+/** The overflow count: same box, no symbol, so it reads as a number. */
+function morePill(env: BadgeEnvironment, hidden: number, closed: boolean): Image {
+  const c = badgeColors(env, closed ? 'closed' : 'rest')
+  const font = env.font.withPointSize(env.badgeMetrics.fontSize)
+  return tagBox(env, Image.fromText(new Text(`+${hidden}`, font, c.ink)), c)
 }
 
 let badge: Disposable | undefined
 
-/** Re-registered when the active tag changes, so its pills repaint. */
+/** Re-registered when the active tag changes, so its badges repaint. */
 function registerBadge() {
   const active = activeTag
   badge?.dispose()
@@ -192,7 +240,7 @@ function registerBadge() {
         key: tag,
         image: pill(env, tag, tag === active ? 'active' : closed ? 'closed' : 'rest'),
       }))
-      if (hidden > 0) images.push({ key: MORE_KEY, image: morePill(env, hidden) })
+      if (hidden > 0) images.push({ key: MORE_KEY, image: morePill(env, hidden, closed) })
       return images
     },
     onClick: ({ editor, row, key }) => showPillMenu(editor, row, key),
@@ -210,7 +258,7 @@ function showPillMenu(editor: OutlineEditor, row: Row, key?: string) {
           type: 'button',
           id: `show:${tag}`,
           title: `#${tag}`,
-          symbol: 'number',
+          symbol: 'tag',
           state: tag === activeTag ? 'on' : 'off',
         })
       ),
@@ -383,7 +431,7 @@ async function chooseTag(placeholder: string, tags: TagCount[]): Promise<string 
   const result = await bike.showChoiceBox(
     {
       placeholder,
-      defaultSymbol: 'number',
+      defaultSymbol: 'tag',
       items: tags.map((t) => ({ name: `#${t.name}`, container: rowsLabel(t.count) })),
     },
     bike.frontmostWindow
@@ -509,7 +557,7 @@ function registerCommands() {
   bike.commands.addCommands({
     commands: {
       'tags:add-tag': {
-        button: { symbol: 'number', location: 'toolbar' },
+        button: { symbol: 'tag', location: 'toolbar' },
         action: (context) => {
           const rows = selectedRows(context)
           if (!context.editor || rows.length === 0) return false

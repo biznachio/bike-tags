@@ -1,6 +1,6 @@
 # Tags for Bike
 
-Tags for [Bike 2](https://www.hogbaysoftware.com/bike/) that live in a row attribute instead of the row text. A row can carry several tags, each one shows as a pill after the text, and one click shows every row with that tag.
+Tags for [Bike 2](https://www.hogbaysoftware.com/bike/) that live in a row attribute instead of the row text. A row can carry several tags, each one shows as a badge after the text, and one click shows every row with that tag.
 
 ```
 tag: assignment, reading, history
@@ -10,8 +10,8 @@ tag: assignment, reading, history
 
 ## What it does
 
-- **Pills.** Each tag on a row shows as a pill. Rows with more than three tags show three plus a "+2" pill. Done and canceled rows fade their pills.
-- **Click a pill** to show rows with that tag, remove it from the row, rename it everywhere, or add another tag.
+- **Tag badges.** Each tag on a row shows as a slate badge with a tag symbol. Rows with more than three tags show three plus a "+2" badge. Done and canceled rows fade theirs.
+- **Click a tag** to show rows with that tag, remove it from the row, rename it everywhere, or add another tag.
 - **Add Tag (⌘⇧T).** Type to pick from tags you already use, or type a new one. Separate tags with commas to add several at once. Works on several selected rows too.
 - **Tags in the inspector.** Every tag with its row count. Click a tag to show its rows; click it again to clear. Hover a tag to rename it.
 - **Filtering.** The tag you're filtering on turns blue, in the outline and in the inspector.
@@ -49,6 +49,19 @@ Because the value is one string, Bike's plain `@tag = reading` query only finds 
 ```
 //@tag = "reading" or @tag beginswith "reading," or @tag endswith ", reading" or @tag contains ", reading,"
 ```
+
+## Theme colors
+
+Tag colors come from the active theme, mixed from its background and text, so they suit light and dark themes without setup. To restyle tags, a theme can define any of these colors:
+
+| Color | Used for |
+| --- | --- |
+| `tag-fill` | Badge background |
+| `tag-stroke` | Badge border |
+| `tag-text` | Tag name |
+| `tag-icon` | Tag symbol |
+
+The tag you're filtering on always uses the theme's accent color.
 
 ## Limits
 

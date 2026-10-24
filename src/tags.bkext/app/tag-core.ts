@@ -63,10 +63,15 @@ export function renamedTag(wire: string | undefined, from: string, to: string): 
  * canonicalized (pasted rows, for instance).
  */
 export function tagFilterPath(tag: string): string {
+  return `//${tagPredicate(tag)}`
+}
+
+/** The row test behind `tagFilterPath`, without the `//` step. */
+export function tagPredicate(tag: string): string {
   const t = normalizeTag(tag)
   const q = (s: string) => `"${s}"`
   return [
-    `//@tag = ${q(t)}`,
+    `@tag = ${q(t)}`,
     `@tag beginswith ${q(t + ',')}`,
     `@tag endswith ${q(', ' + t)}`,
     `@tag endswith ${q(',' + t)}`,

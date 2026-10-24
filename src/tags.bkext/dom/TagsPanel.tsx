@@ -52,7 +52,10 @@ function Panel({ context }: { context: DOMExtensionContext<TagsProtocol> }) {
       {state.active && (
         <div className="rt-active">
           <span>{bike.localize('Showing')}</span>
-          <span className="rt-chip">#{state.active}</span>
+          <span className="rt-chip">
+            <SFSymbol name="tag.fill" scale="small" aria-hidden="true" />
+            {state.active}
+          </span>
           <span className="rt-spacer" />
           <button className="rt-link" onClick={() => send({ type: 'clear' })}>
             {bike.localize('Clear')}
@@ -98,9 +101,7 @@ function Panel({ context }: { context: DOMExtensionContext<TagsProtocol> }) {
                   title={on ? bike.localize('Clear tag filter') : bike.localize('Show rows tagged #{tag}', { tag: tag.name })}
                   onClick={() => send({ type: 'toggle', tag: tag.name })}
                 >
-                  <span className="rt-hash" aria-hidden="true">
-                    #
-                  </span>
+                  <SFSymbol className="rt-icon-tag" name="tag.fill" scale="small" aria-hidden="true" />
                   <span className="rt-name">{tag.name}</span>
                   <span className="rt-count">{tag.count}</span>
                 </button>
