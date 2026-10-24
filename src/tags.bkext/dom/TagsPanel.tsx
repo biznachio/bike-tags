@@ -1,18 +1,36 @@
 import { DOMExtensionContext } from 'bike/dom'
-import { SFSymbol } from 'bike/components'
+import { Disclosure, SFSymbol } from 'bike/components'
 import { createRoot } from 'react-dom/client'
 import { useEffect, useMemo, useState } from 'react'
 import './tags.css'
-import { PanelState, TagsProtocol } from './protocols'
+import { OTHER_AREAS, PanelFilter, PanelHeatmap, PanelSelection, PanelState, PanelTag, TagsProtocol } from './protocols'
 
-// The inspector's Tags list: every tag with its row count. Click to show
-// those rows, click again to clear. Hover a tag to rename it everywhere.
+// The inspector's Tags section. Each area has one job, and says so:
+//
+// - The yellow notice (only while inline #tags remain) opens the Convert window.
+// - The card tags the selected rows, or, while filtering, describes the filter.
+// - "Filter by tag" filters: click tags to select them; rows must have them
+//   all. List and Map are two views of the same tags.
 
-const SEARCH_THRESHOLD = 12
+const OPEN_KEY = 'panelOpen'
+const VIEW_KEY = 'filterView'
+const SEARCH_THRESHOLD = 14
+
+type Send = (message: TagsProtocol['toApp']) => void
+type View = 'list' | 'map'
+
+function rowsText(count: number): string {
+  return bike.localize('{count, plural, one {# row} other {# rows}}', { count })
+}
+
+function TagIcon() {
+  return <SFSymbol className="rt-tag-icon" name="tag.fill" scale="small" aria-hidden="true" />
+}
 
 function Panel({ context }: { context: DOMExtensionContext<TagsProtocol> }) {
   const [state, setState] = useState<PanelState | null>(null)
-  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(() => bike.defaults.get(OPEN_KEY) !== false)
+  const [view, setView] = useState<View>(() => (bike.defaults.get(VIEW_KEY) === 'map' ? 'map' : 'list'))
 
   useEffect(() => {
     context.onmessage = (message) => {
@@ -21,60 +39,197 @@ function Panel({ context }: { context: DOMExtensionContext<TagsProtocol> }) {
     context.postMessage({ type: 'ready' })
   }, [context])
 
-  const tags = state?.tags ?? []
-  const shown = useMemo(() => {
-    const q = query.trim().replace(/^#/, '').toLowerCase()
-    return q ? tags.filter((t) => t.name.includes(q)) : tags
-  }, [tags, query])
+  const send: Send = (message) => context.postMessage(message)
+  const count = state?.tags.length ?? 0
 
-  if (!state) return <div className="rt-root" />
-  if (!state.hasOutline) {
-    return (
-      <div className="rt-root">
-        <p className="rt-empty">{bike.localize('Open an outline to see its tags.')}</p>
-      </div>
-    )
+  const toggleOpen = (value: boolean) => {
+    setOpen(value)
+    bike.defaults.set(OPEN_KEY, value)
+  }
+  const chooseView = (value: View) => {
+    setView(value)
+    bike.defaults.set(VIEW_KEY, value)
   }
 
-  const send = (message: TagsProtocol['toApp']) => context.postMessage(message)
+  const label = (
+    <span className="rt-title">
+      {bike.localize('Tags')}
+      {count > 0 && <span className="rt-total">{count}</span>}
+    </span>
+  )
+  // Section-wide: done and canceled rows drop out of filters, counts and the map.
+  const hideDoneSwitch = state?.hasOutline ? (
+    <label
+      className="rt-switch"
+      title={bike.localize('Leave done and canceled rows out of tag filters, counts and the map')}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span>{bike.localize('Hide done')}</span>
+      <input type="checkbox" role="switch" checked={state.hideDone} onChange={(e) => send({ type: 'hideDone', value: e.target.checked })} />
+      <span className="rt-switch-track" aria-hidden="true">
+        <span className="rt-switch-thumb" />
+      </span>
+    </label>
+  ) : undefined
 
   return (
     <div className="rt-root">
-      <div className="rt-head">
-        <span className="rt-title">{bike.localize('Tags')}</span>
-        {tags.length > 0 && <span className="rt-total">{tags.length}</span>}
+      <Disclosure label={label} expanded={open} onChange={toggleOpen} accessory={hideDoneSwitch} accessoryAlignment="trailing">
+        {!state ? null : !state.hasOutline ? (
+          <p className="rt-empty">{bike.localize('Open an outline to see its tags.')}</p>
+        ) : (
+          <Body state={state} send={send} view={view} onView={chooseView} />
+        )}
+      </Disclosure>
+    </div>
+  )
+}
+
+function Body({ state, send, view, onView }: { state: PanelState; send: Send; view: View; onView: (v: View) => void }) {
+  return (
+    <div className="rt-body">
+      {state.hashTagRows > 0 && <ConvertNotice count={state.hashTagRows} send={send} />}
+      {state.filter ? <FilterCard filter={state.filter} send={send} /> : state.selection && <ThisRow selection={state.selection} send={send} />}
+      {state.tags.length === 0 ? (
+        <p className="rt-empty rt-pad">{bike.localize('No tags yet. Select a row and press ⌘⇧T.')}</p>
+      ) : (
+        <FilterByTag state={state} send={send} view={view} onView={onView} />
+      )}
+    </div>
+  )
+}
+
+// MARK: - Notice
+
+function ConvertNotice({ count, send }: { count: number; send: Send }) {
+  return (
+    <div className="rt-notice" role="alert">
+      <SFSymbol className="rt-notice-icon" name="exclamationmark.triangle.fill" aria-hidden="true" />
+      <div className="rt-notice-text">
+        <span className="rt-notice-title">{bike.localize('{count, plural, one {# row has} other {# rows have}} inline #tags', { count })}</span>
+        <span className="rt-notice-detail">{bike.localize('They won’t show in Tags until they’re converted.')}</span>
+      </div>
+      <button className="rt-notice-button" onClick={() => send({ type: 'convert' })}>
+        {bike.localize('Review…')}
+      </button>
+    </div>
+  )
+}
+
+// MARK: - Cards
+
+function Chip({ tag, variant, onRemove, removeLabel }: { tag: string; variant?: 'partial' | 'active'; onRemove: () => void; removeLabel: string }) {
+  return (
+    <span className={variant ? `rt-chip rt-chip-${variant}` : 'rt-chip'} title={variant === 'partial' ? bike.localize('On some of the selected rows') : undefined}>
+      {variant !== 'active' && <TagIcon />}
+      <span>{tag}</span>
+      <button className="rt-chip-x" aria-label={removeLabel} onClick={onRemove}>
+        <SFSymbol name="xmark" scale="small" />
+      </button>
+    </span>
+  )
+}
+
+function ThisRow({ selection, send }: { selection: PanelSelection; send: Send }) {
+  const remove = (tag: string) => () => send({ type: 'removeRowTag', tag })
+  const has = selection.all.length + selection.some.length > 0
+  return (
+    <section className="rt-section" aria-label={bike.localize('Tags on the selected rows')}>
+      <div className="rt-section-head">
+        <span className="rt-card-label">{bike.localize('This row')}</span>
+        <span className="rt-card-subject">{selection.label}</span>
+      </div>
+      <div className="rt-card">
+        {has && (
+          <div className="rt-chips">
+            {selection.all.map((tag) => (
+              <Chip key={tag} tag={tag} onRemove={remove(tag)} removeLabel={bike.localize('Remove {tag}', { tag })} />
+            ))}
+            {selection.some.map((tag) => (
+              <Chip key={tag} tag={tag} variant="partial" onRemove={remove(tag)} removeLabel={bike.localize('Remove {tag}', { tag })} />
+            ))}
+          </div>
+        )}
+        <div className="rt-chips">
+          <span className="rt-add-label">{bike.localize('Add')}</span>
+          {selection.suggest.map((tag) => (
+            <button key={tag} className="rt-suggest" onClick={() => send({ type: 'addRowTag', tag })} aria-label={bike.localize('Add {tag}', { tag })}>
+              <SFSymbol name="plus" scale="small" />
+              {tag}
+            </button>
+          ))}
+          <button className="rt-link rt-other" title={bike.localize('Pick or create a tag (⌘⇧T)')} onClick={() => send({ type: 'add' })}>
+            {selection.suggest.length > 0 ? bike.localize('Other…') : bike.localize('Add Tag…')}
+          </button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function FilterCard({ filter, send }: { filter: PanelFilter; send: Send }) {
+  return (
+    <section className="rt-section" aria-label={bike.localize('Tag filter')}>
+      <div className="rt-section-head">
+        <span className="rt-card-label">{bike.localize('Showing rows with')}</span>
         <span className="rt-spacer" />
-        <button className="rt-icon" aria-label={bike.localize('Add Tag to Selected Rows')} title={bike.localize('Add Tag to Selected Rows (⌘⇧T)')} onClick={() => send({ type: 'add' })}>
-          <SFSymbol name="plus" />
+        <button className="rt-link rt-head-action" onClick={() => send({ type: 'clear' })}>
+          {bike.localize('Clear filter')}
         </button>
       </div>
+      <div className="rt-card rt-card-roomy">
+        <div className="rt-sentence">
+          {filter.tags.map((tag, i) => (
+            <span key={tag} className="rt-sentence-part">
+              {i > 0 && <span className="rt-muted">{bike.localize('and')}</span>}
+              <Chip tag={tag} variant="active" onRemove={() => send({ type: 'removeFilterTag', tag })} removeLabel={bike.localize('Remove {tag} from the filter', { tag })} />
+            </span>
+          ))}
+          {filter.area && <span className="rt-muted">{bike.localize('in {area}', { area: filter.area.name })}</span>}
+        </div>
+        <span className="rt-muted rt-small">{rowsText(filter.hideDone ? filter.open : filter.rows)}</span>
+      </div>
+    </section>
+  )
+}
 
-      {state.active && (
-        <div className="rt-active">
-          <span>{bike.localize('Showing')}</span>
-          <span className="rt-chip">
-            <SFSymbol name="tag.fill" scale="small" aria-hidden="true" />
-            {state.active}
-          </span>
-          <span className="rt-spacer" />
-          <button className="rt-link" onClick={() => send({ type: 'clear' })}>
-            {bike.localize('Clear')}
+// MARK: - Filter by tag
+
+function FilterByTag({ state, send, view, onView }: { state: PanelState; send: Send; view: View; onView: (v: View) => void }) {
+  const [query, setQuery] = useState('')
+  const shown = useMemo(() => {
+    const q = query.trim().replace(/^#/, '').toLowerCase()
+    return q ? state.tags.filter((t) => t.name.includes(q)) : state.tags
+  }, [state.tags, query])
+  const filtering = !!state.filter
+
+  const hint =
+    view === 'map'
+      ? filtering
+        ? bike.localize('Faded tags never appear with the selected ones. Click a cell to narrow to one area.')
+        : bike.localize('Click a tag to filter, or a cell to see that tag in one area.')
+      : filtering
+        ? bike.localize('Faded tags never appear with the selected ones.')
+        : bike.localize('Select tags to show rows that have all of them.')
+
+  return (
+    <section className="rt-section" aria-label={bike.localize('Filter by tag')}>
+      <div className="rt-section-head">
+        <span className="rt-card-label">{bike.localize('Filter by tag')}</span>
+        <span className="rt-spacer" />
+        <div className="rt-segmented" role="radiogroup" aria-label={bike.localize('View')}>
+          <button role="radio" aria-checked={view === 'list'} className={view === 'list' ? 'rt-seg rt-seg-on' : 'rt-seg'} onClick={() => onView('list')}>
+            <SFSymbol name="list.bullet" scale="small" />
+            {bike.localize('List')}
+          </button>
+          <button role="radio" aria-checked={view === 'map'} className={view === 'map' ? 'rt-seg rt-seg-on' : 'rt-seg'} onClick={() => onView('map')}>
+            <SFSymbol name="square.grid.2x2" scale="small" />
+            {bike.localize('Map')}
           </button>
         </div>
-      )}
+      </div>
 
-      {state.hashTagRows > 0 && (
-        <div className="rt-note">
-          <span>
-            {bike.localize('{count, plural, one {# row still has} other {# rows still have}} inline #tags.', { count: state.hashTagRows })}
-          </span>
-          <button className="rt-link" onClick={() => send({ type: 'convert' })}>
-            {bike.localize('Convert…')}
-          </button>
-        </div>
-      )}
-
-      {tags.length > SEARCH_THRESHOLD && (
+      {state.tags.length > SEARCH_THRESHOLD && (
         <input
           className="rt-search"
           type="search"
@@ -85,39 +240,138 @@ function Panel({ context }: { context: DOMExtensionContext<TagsProtocol> }) {
         />
       )}
 
-      {tags.length === 0 ? (
-        <p className="rt-empty">{bike.localize('No tags yet. Select a row and press ⌘⇧T.')}</p>
-      ) : shown.length === 0 ? (
-        <p className="rt-empty">{bike.localize('No tags match.')}</p>
+      {shown.length === 0 ? (
+        <p className="rt-empty rt-pad">{bike.localize('No tags match.')}</p>
+      ) : view === 'list' ? (
+        <TagList tags={shown} state={state} send={send} />
       ) : (
-        <ul className="rt-list">
-          {shown.map((tag) => {
-            const on = tag.name === state.active
-            return (
-              <li key={tag.name} className={on ? 'rt-item rt-on' : 'rt-item'}>
-                <button
-                  className="rt-tag"
-                  aria-pressed={on}
-                  title={on ? bike.localize('Clear tag filter') : bike.localize('Show rows tagged #{tag}', { tag: tag.name })}
-                  onClick={() => send({ type: 'toggle', tag: tag.name })}
-                >
-                  <SFSymbol className="rt-icon-tag" name="tag.fill" scale="small" aria-hidden="true" />
-                  <span className="rt-name">{tag.name}</span>
-                  <span className="rt-count">{tag.count}</span>
-                </button>
-                <button
-                  className="rt-rename"
-                  aria-label={bike.localize('Rename #{tag}', { tag: tag.name })}
-                  title={bike.localize('Rename everywhere…')}
-                  onClick={() => send({ type: 'rename', tag: tag.name })}
-                >
-                  <SFSymbol name="pencil" />
-                </button>
-              </li>
-            )
-          })}
-        </ul>
+        <Heatmap heatmap={state.heatmap} tags={shown} filter={state.filter} send={send} />
       )}
+      <p className="rt-hint">{hint}</p>
+    </section>
+  )
+}
+
+/** While filtering, a tag that never appears with the selected ones can't narrow it further. */
+function isDim(filter: PanelFilter | undefined, tag: string): boolean {
+  return !!filter && !filter.tags.includes(tag) && !filter.combinable[tag]
+}
+
+function filterTitle(filter: PanelFilter | undefined, tag: string): string {
+  if (isDim(filter, tag)) return bike.localize('No rows have #{tag} with the selected tags', { tag })
+  if (filter?.tags.includes(tag)) return bike.localize('Take #{tag} out of the filter', { tag })
+  return bike.localize('Add #{tag} to the filter', { tag })
+}
+
+function TagList({ tags, state, send }: { tags: PanelTag[]; state: PanelState; send: Send }) {
+  const max = Math.max(1, ...state.tags.map((t) => t.count))
+  const active = new Set(state.filter?.tags ?? [])
+  return (
+    <ul className="rt-list">
+      {tags.map((tag) => {
+        const on = active.has(tag.name)
+        const dim = isDim(state.filter, tag.name)
+        return (
+          <li key={tag.name} className={on ? 'rt-item rt-on' : dim ? 'rt-item rt-dim' : 'rt-item'}>
+            <button
+              className="rt-tag"
+              aria-pressed={on}
+              aria-disabled={dim}
+              title={filterTitle(state.filter, tag.name)}
+              onClick={() => {
+                if (!dim) send({ type: 'toggleFilterTag', tag: tag.name })
+              }}
+            >
+              {on ? <SFSymbol className="rt-tag-icon" name="checkmark.circle.fill" scale="small" aria-hidden="true" /> : <TagIcon />}
+              <span className="rt-name">{tag.name}</span>
+              <span className="rt-bar" aria-hidden="true">
+                <span className="rt-bar-open" style={{ width: `${(tag.open / max) * 100}%` }} />
+                {!state.hideDone && <span className="rt-bar-done" style={{ width: `${((tag.count - tag.open) / max) * 100}%` }} />}
+              </span>
+              {state.hideDone ? (
+                <span className="rt-count" aria-label={rowsText(tag.open)}>
+                  <b>{tag.open}</b>
+                </span>
+              ) : (
+                <span className="rt-count" aria-label={bike.localize('{open} not done of {total}', { open: tag.open, total: tag.count })}>
+                  <b>{tag.open}</b> / {tag.count}
+                </span>
+              )}
+            </button>
+            <button
+              className="rt-rename"
+              aria-label={bike.localize('Rename #{tag}', { tag: tag.name })}
+              title={bike.localize('Rename everywhere…')}
+              onClick={() => send({ type: 'rename', tag: tag.name })}
+            >
+              <SFSymbol name="pencil" scale="small" />
+            </button>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+function heatLevel(n: number, max: number): number {
+  if (n === 0) return 0
+  return Math.min(5, 1 + Math.floor((n / max) * 4.999))
+}
+
+function Heatmap({ heatmap, tags, filter, send }: { heatmap: PanelHeatmap; tags: PanelTag[]; filter?: PanelFilter; send: Send }) {
+  if (heatmap.areas.length === 0) return <p className="rt-empty rt-pad">{bike.localize('No tagged rows yet.')}</p>
+  const max = Math.max(1, ...Object.values(heatmap.cells).flat())
+  const active = new Set(filter?.tags ?? [])
+  const columns = `minmax(72px, 1.4fr) repeat(${heatmap.areas.length}, minmax(0, 1fr))`
+  return (
+    <div className="rt-heat" role="table" aria-label={bike.localize('Tagged rows by area')} style={{ gridTemplateColumns: columns }}>
+      <span role="columnheader" />
+      {heatmap.areas.map((area) => (
+        <span key={area.id} role="columnheader" className="rt-heat-area" title={area.full ?? area.name}>
+          {area.name}
+        </span>
+      ))}
+      {tags.flatMap((tag) => {
+        const counts = heatmap.cells[tag.name] ?? heatmap.areas.map(() => 0)
+        const on = active.has(tag.name)
+        const dim = isDim(filter, tag.name)
+        return [
+          <button
+            key={`${tag.name}:label`}
+            role="rowheader"
+            aria-pressed={on}
+            aria-disabled={dim}
+            className={on ? 'rt-heat-tag rt-heat-tag-on' : dim ? 'rt-heat-tag rt-dim' : 'rt-heat-tag'}
+            title={filterTitle(filter, tag.name)}
+            onClick={() => {
+              if (!dim) send({ type: 'toggleFilterTag', tag: tag.name })
+            }}
+          >
+            {tag.name}
+          </button>,
+          ...counts.map((n, i) => {
+            const area = heatmap.areas[i]
+            const picked = filter?.area?.id === area.id && filter.tags.length === 1 && filter.tags[0] === tag.name
+            return (
+              <button
+                key={`${tag.name}:${area.id}`}
+                role="cell"
+                className={`rt-heat-cell rt-heat-${heatLevel(n, max)}${picked ? ' rt-heat-picked' : ''}${dim ? ' rt-dim' : ''}`}
+                disabled={n === 0}
+                title={
+                  area.id === OTHER_AREAS
+                    ? bike.localize('Show #{tag} everywhere ({areas} hold {rows})', { tag: tag.name, areas: area.full ?? '', rows: rowsText(n) })
+                    : bike.localize('Show #{tag} in {area}', { tag: tag.name, area: area.name })
+                }
+                aria-label={bike.localize('{tag} in {area}: {rows}', { tag: tag.name, area: area.name, rows: rowsText(n) })}
+                onClick={() => send({ type: 'heatCell', tag: tag.name, areaId: area.id })}
+              >
+                {n > 0 ? n : ''}
+              </button>
+            )
+          }),
+        ]
+      })}
     </div>
   )
 }

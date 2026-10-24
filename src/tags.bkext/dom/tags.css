@@ -1,54 +1,60 @@
 /*
- * Tags inspector. Prefixed rt- because inspector items can share a page.
- * Same small system as Backlinks and HUD: label grays, the accent marks the
- * active tag, spacing steps 4, 8, 12, 24, pills 5px round.
+ * Tags inspector and Convert window. Prefixed rt- because inspector items
+ * can share a page. Same small system as Backlinks and HUD: label grays, the
+ * accent marks what's active, spacing steps 4, 8, 12, 24, corners 5 px for
+ * chips and 8 px for cards.
  */
 
 .rt-root {
   --rt-accent: var(--control-accent, var(--system-blue));
   --rt-hover: color-mix(in srgb, var(--label) 6%, transparent);
   --rt-fill: color-mix(in srgb, var(--label) 7%, transparent);
-  --rt-soft: color-mix(in srgb, var(--rt-accent) 14%, transparent);
   /* Slate, matching the outline's tag badges: mixed into the window's own colors. */
   --rt-slate: oklch(0.6 0.05 262);
   --rt-slate-fill: color-mix(in oklab, var(--background) 86%, var(--rt-slate));
   --rt-slate-stroke: color-mix(in oklab, var(--background) 62%, var(--rt-slate));
   --rt-slate-ink: color-mix(in oklab, var(--label) 68%, var(--rt-slate));
   --rt-slate-icon: color-mix(in oklab, var(--label) 38%, var(--rt-slate));
+  --rt-slate-bar: color-mix(in oklab, var(--label) 25%, var(--rt-slate));
+  /* Card: a rounded panel tinted with the text color, so it reads in light and dark alike. */
+  --rt-card-bg: color-mix(in srgb, var(--label) 5%, transparent);
+  --rt-card-edge: color-mix(in srgb, var(--label) 12%, transparent);
   color: var(--label);
-  padding: 4px 2px 24px;
   -webkit-user-select: none;
   user-select: none;
 }
 
-.rt-root button {
+
+/* :where keeps this at element weight, so single-class rules like .rt-link win. */
+:where(.rt-root) button {
   font: inherit;
   color: inherit;
 }
 
 .rt-spacer {
   flex: 1;
+  min-width: 0;
 }
 
-/* Header */
-
-.rt-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 8px;
+.rt-muted {
+  color: var(--secondary-label);
 }
+
+/* Header (inside Bike's Disclosure) */
 
 .rt-title {
-  font-weight: 600;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
 }
 
 .rt-total {
   color: var(--secondary-label);
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
 
-.rt-icon {
+.rt-icon-button {
   all: unset;
   width: 22px;
   height: 20px;
@@ -58,39 +64,119 @@
   color: var(--secondary-label);
 }
 
-.rt-icon:hover {
+.rt-icon-button:hover {
   background: var(--rt-hover);
   color: var(--label);
 }
 
-/* Active filter and the convert note */
-
-.rt-active,
-.rt-note {
+.rt-body {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0 12px;
+}
+
+/* Card */
+
+.rt-card {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  margin: 0 0 8px;
-  padding: 6px 8px;
-  border-radius: 7px;
-  background: var(--rt-fill);
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--rt-card-bg);
+}
+
+.rt-card-flush {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.rt-card-label {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
   color: var(--secondary-label);
 }
 
-.rt-note span:first-child {
+.rt-card-subject {
   flex: 1;
+  min-width: 0;
+  color: var(--secondary-label);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Chips */
+
+.rt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
 }
 
 .rt-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 0 7px 0 5px;
+  height: 22px;
+  padding: 0 3px 0 6px;
+  box-sizing: border-box;
   border-radius: 5px;
-  background: var(--rt-soft);
-  color: var(--rt-accent);
-  line-height: 18px;
+  background: var(--rt-slate-fill);
+  box-shadow: inset 0 0 0 1px var(--rt-slate-stroke);
+  color: var(--rt-slate-ink);
+  font-size: 12px;
 }
+
+.rt-chip .rt-tag-icon {
+  color: var(--rt-slate-icon);
+}
+
+.rt-chip-partial {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--rt-slate-stroke);
+  border: 0;
+  opacity: 0.75;
+}
+
+.rt-chip-active {
+  background: var(--rt-accent);
+  box-shadow: none;
+  color: white;
+}
+
+.rt-chip-active .rt-tag-icon {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.rt-chip-small {
+  height: 18px;
+  padding: 0 6px 0 5px;
+  font-size: 11px;
+}
+
+.rt-chip-x {
+  all: unset;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  opacity: 0.7;
+}
+
+.rt-chip-x:hover {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+/* Links, notes, hints */
 
 .rt-link {
   all: unset;
@@ -103,12 +189,23 @@
   text-decoration: underline;
 }
 
+.rt-hint {
+  margin: 4px 0 0;
+  padding: 0 8px;
+  color: var(--tertiary-label);
+  font-size: 11px;
+}
+
+.rt-empty {
+  margin: 4px 0;
+  color: var(--secondary-label);
+}
+
 /* Search */
 
 .rt-search {
   width: 100%;
   box-sizing: border-box;
-  margin: 0 0 8px;
   padding: 4px 8px;
   border: 0;
   border-radius: 6px;
@@ -136,6 +233,8 @@
   position: relative;
   display: flex;
   align-items: center;
+  gap: 2px;
+  padding-left: 6px;
   border-radius: 6px;
 }
 
@@ -149,38 +248,57 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   height: 26px;
-  padding: 0 8px;
+  padding: 0 8px 0 4px;
   border-radius: 6px;
 }
 
-.rt-icon-tag {
+.rt-tag .rt-tag-icon {
   flex: none;
-  width: 14px;
+  width: 15px;
   text-align: center;
   color: var(--rt-slate-icon);
 }
 
 .rt-name {
-  flex: 1;
-  min-width: 0;
+  flex: none;
+  width: 96px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.rt-bar {
+  flex: 1;
+  min-width: 24px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--rt-fill);
+  display: flex;
+  overflow: hidden;
+}
+
+.rt-bar-open {
+  background: var(--rt-slate-bar);
+}
+
+.rt-bar-done {
+  background: var(--rt-slate-stroke);
+}
+
 .rt-count {
   flex: none;
-  padding: 0 6px;
-  border-radius: 5px;
-  background: var(--rt-slate-fill);
-  box-shadow: inset 0 0 0 1px var(--rt-slate-stroke);
-  color: var(--rt-slate-ink);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 16px;
+  min-width: 44px;
+  text-align: right;
+  color: var(--secondary-label);
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+
+.rt-count b {
+  font-weight: 600;
+  color: var(--label);
 }
 
 /* Rename floats over the count on hover, so nothing reflows. */
@@ -195,7 +313,7 @@
   border-radius: 5px;
   background: var(--background);
   color: var(--secondary-label);
-  box-shadow: 0 0 0 0.5px var(--separator);
+  box-shadow: 0 0 0 0.5px var(--rt-card-edge);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.12s;
@@ -211,7 +329,7 @@
   color: var(--rt-accent);
 }
 
-/* Active tag: the one the outline is filtered to. */
+/* Filtered tags: solid accent. */
 
 .rt-on,
 .rt-on:hover {
@@ -219,25 +337,466 @@
 }
 
 .rt-on .rt-tag,
-.rt-on .rt-name {
+.rt-on .rt-count,
+.rt-on .rt-count b {
   color: white;
 }
 
-.rt-on .rt-icon-tag {
+.rt-on .rt-tag .rt-tag-icon {
   color: rgba(255, 255, 255, 0.85);
 }
 
-.rt-on .rt-count {
-  background: rgba(255, 255, 255, 0.22);
-  box-shadow: none;
-  color: white;
+.rt-on .rt-bar {
+  background: rgba(255, 255, 255, 0.25);
 }
 
-.rt-tag:focus-visible {
+.rt-on .rt-bar-open {
+  background: white;
+}
+
+.rt-on .rt-bar-done {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.rt-tag:focus-visible,
+.rt-heat-tag:focus-visible,
+.rt-seg:focus-visible,
+.rt-suggest:focus-visible {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--rt-accent) 55%, transparent);
 }
 
-.rt-empty {
-  margin: 4px 0 0;
+/* Where tags live */
+
+.rt-heat {
+  display: grid;
+  gap: 3px;
+  align-items: center;
+}
+
+.rt-heat-area {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--secondary-label);
+  padding-bottom: 2px;
+}
+
+.rt-heat-tag {
+  all: unset;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.rt-heat-tag:hover {
+  background: var(--rt-hover);
+}
+
+.rt-heat-tag-on,
+.rt-heat-tag-on:hover {
+  background: var(--rt-accent);
+  color: white;
+}
+
+.rt-heat-cell {
+  all: unset;
+  height: 22px;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rt-heat-cell:not(:disabled):hover {
+  box-shadow: 0 0 0 1.5px var(--rt-accent);
+}
+
+.rt-heat-0 {
+  background: var(--rt-fill);
+}
+
+.rt-heat-1 {
+  background: color-mix(in oklab, var(--background) 88%, var(--rt-slate));
+  color: var(--rt-slate-ink);
+}
+
+.rt-heat-2 {
+  background: color-mix(in oklab, var(--background) 70%, var(--rt-slate));
+  color: var(--rt-slate-ink);
+}
+
+.rt-heat-3 {
+  background: color-mix(in oklab, var(--background) 45%, var(--rt-slate));
+  color: var(--label);
+}
+
+.rt-heat-4 {
+  background: var(--rt-slate);
+  color: white;
+}
+
+.rt-heat-5 {
+  background: color-mix(in oklab, var(--rt-slate) 60%, black);
+  color: white;
+}
+
+.rt-heat-picked {
+  box-shadow: 0 0 0 2px var(--rt-accent);
+}
+
+/* Convert window */
+
+.rt-sheet {
+  box-sizing: border-box;
+  height: 100vh;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--background);
+}
+
+.rt-sheet-head h1 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.rt-sheet-head p {
+  margin: 0;
+  color: var(--secondary-label);
+  line-height: 1.45;
+}
+
+.rt-sheet .rt-card {
+  flex: 1;
+  min-height: 0;
+}
+
+.rt-sheet-all {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--separator);
+  font-size: 12px;
+}
+
+.rt-sheet-list {
+  flex: 1;
+  min-height: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.rt-sheet-item label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--separator) 60%, transparent);
+}
+
+.rt-sheet-item input,
+.rt-sheet-all input {
+  margin: 2px 0 0;
+  accent-color: var(--rt-accent);
+}
+
+.rt-sheet-off .rt-sheet-text {
+  opacity: 0.5;
+}
+
+.rt-sheet-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rt-sheet-before {
+  color: var(--secondary-label);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rt-sheet-after {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.rt-sheet-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rt-button {
+  height: 26px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--rt-fill);
+  color: var(--label);
+}
+
+.rt-button:hover {
+  background: color-mix(in srgb, var(--label) 12%, transparent);
+}
+
+.rt-button-primary,
+.rt-button-primary:hover {
+  background: var(--rt-accent);
+  color: white;
+}
+
+.rt-button:disabled {
+  opacity: 0.45;
+}
+
+/* Notice: inline #tags waiting to convert. Yellow, so it's noticed. */
+
+.rt-notice {
+  --rt-yellow: var(--system-yellow, #f5b800);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--rt-yellow) 13%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rt-yellow) 40%, transparent);
+}
+
+.rt-notice-icon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--rt-yellow);
+}
+
+.rt-notice-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rt-notice-title {
+  font-weight: 600;
+}
+
+.rt-notice-detail {
+  color: var(--secondary-label);
+  font-size: 12px;
+}
+
+.rt-notice-button {
+  flex: none;
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--background);
+  box-shadow: 0 0 0 0.5px var(--rt-card-edge);
+  color: var(--label);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* This row: suggested tags to add in one click. */
+
+.rt-add-label {
+  color: var(--secondary-label);
+  font-size: 12px;
+  margin-right: 2px;
+}
+
+.rt-suggest {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 8px 0 6px;
+  box-sizing: border-box;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px var(--rt-card-edge);
+  color: var(--secondary-label);
+  font-size: 12px;
+}
+
+.rt-suggest:hover {
+  color: var(--label);
+  background: var(--rt-hover);
+}
+
+.rt-other {
+  font-size: 12px;
+  padding: 0 4px;
+}
+
+/* Filter card: the filter as a sentence. */
+
+.rt-sentence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  line-height: 22px;
+}
+
+.rt-sentence-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Filter by tag: header and the List / Map switch. */
+
+.rt-segmented {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--rt-fill);
+}
+
+.rt-seg {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--secondary-label);
+}
+
+.rt-seg-on {
+  background: var(--background);
+  color: var(--label);
+  box-shadow: 0 0.5px 1.5px rgba(0, 0, 0, 0.18);
+}
+
+.rt-pad {
+  padding: 0 8px;
+}
+
+.rt-search {
+  margin-bottom: 8px;
+}
+
+/* Sections: a small heading above each card. */
+
+.rt-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rt-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  padding: 0 0 0 8px;
+}
+
+.rt-head-action {
+  font-size: 12px;
+  padding-right: 8px;
+}
+
+.rt-card-subject {
+  font-size: 12px;
+}
+
+.rt-card-roomy {
+  gap: 12px;
+}
+
+/* Tags that can't narrow the current filter. */
+
+.rt-dim {
+  opacity: 0.35;
+}
+
+.rt-dim:hover,
+.rt-item.rt-dim:hover {
+  background: transparent;
+}
+
+.rt-dim .rt-rename {
+  display: none;
+}
+
+/* Hide done: a small labeled switch in the Tags heading. */
+
+.rt-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--secondary-label);
+  cursor: default;
+}
+
+.rt-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.rt-switch-track {
+  position: relative;
+  width: 26px;
+  height: 15px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--label) 18%, transparent);
+  transition: background 0.15s;
+}
+
+.rt-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 0.5px 1.5px rgba(0, 0, 0, 0.25);
+  transition: left 0.15s;
+}
+
+.rt-switch input:checked + .rt-switch-track {
+  background: var(--rt-accent);
+}
+
+.rt-switch input:checked + .rt-switch-track .rt-switch-thumb {
+  left: 13px;
+}
+
+.rt-switch input:focus-visible + .rt-switch-track {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--rt-accent) 45%, transparent);
+}
+
+.rt-small {
+  font-size: 12px;
 }

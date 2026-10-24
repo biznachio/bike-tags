@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.0.3 (2026-10-24)
+
+### New
+- Filter by several tags: click tags in the inspector to show rows that have all of them
+- Tags that never appear with the selected ones fade out while filtering
+- Hide done: a switch beside the Tags heading leaves done and canceled rows out of filters, counts, the map and suggestions
+- This row card: the selected rows' tags, with one-click adds for your most-used tags
+- Open and done bars and counts for every tag
+- Map view: tags against your four busiest top-level rows, the rest combined in one column; click a cell to see a tag in one area
+- Convert window: review rows with inline #tags and pick which to convert
+- A yellow notice at the top of the inspector while inline #tags remain
+
+### Changed
+- The Tags section collapses, like the other inspector sections, and remembers its state
+- Tagging happens in the This row card and filtering in the tag list, each under its own heading
+- Clear filter sits in the filter's heading
+- Inspector panels use a shared card style, a soft tint of the text color that reads in light and dark
+- The + beside the Tags heading gives way to the Hide done switch; the This row card and ⌘⇧T add tags
+
+### Fixed
+- Clear and other links in the inspector use the accent color
+- Converting inline #tags no longer crashes Bike
+- The notice and the Convert window count the same rows
+- The inspector updates when Hide done changes a filter whose tags stay the same
+
 ## 0.0.2 (2026-10-24)
 
 - Tags draw as badges: a tag symbol and the name in a rounded box with a soft slate fill and a matching stroke. The box uses Bike's own badge corners, so it lines up with the highlight Bike draws while filtering.

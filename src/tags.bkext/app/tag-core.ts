@@ -83,6 +83,8 @@ export function tagPredicate(tag: string): string {
 export interface TagCount {
   name: string
   count: number
+  /** Rows carrying the tag that aren't done or canceled. */
+  open?: number
 }
 
 /** Tag → number of rows carrying it, sorted by name. */
@@ -96,17 +98,59 @@ export function countTags(wires: Iterable<string | undefined>): TagCount[] {
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
+/** Like `countTags`, plus how many of each tag's rows are still open. */
+export function countTagsWithOpen(rows: Iterable<{ wire: string | undefined; closed: boolean }>): Required<TagCount>[] {
+  const counts = new Map<string, { count: number; open: number }>()
+  for (const { wire, closed } of rows) {
+    for (const tag of parseTags(wire)) {
+      const c = counts.get(tag) ?? { count: 0, open: 0 }
+      c.count += 1
+      if (!closed) c.open += 1
+      counts.set(tag, c)
+    }
+  }
+  return [...counts.entries()]
+    .map(([name, c]) => ({ name, count: c.count, open: c.open }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+// MARK: - Combined filters
+
+const OPEN_ONLY = 'not (@status = done or @status = canceled)'
+
 /**
- * The tags a badge draws before folding the rest into "+N". The active
- * (filtered) tag always stays visible, so the reason a row is showing is
+ * Rows carrying every tag in `tags` (all, not any), optionally leaving out
+ * done and canceled rows.
+ */
+export function combinedFilterPath(tags: readonly string[], hideDone: boolean): string {
+  const parts = ['//@tag', ...tags.map((t) => `(${tagPredicate(t)})`)]
+  if (hideDone) parts.push(`(${OPEN_ONLY})`)
+  return parts.join(' and ')
+}
+
+/** The filter field label for a combined filter: "#a + #b". */
+export function filterLabel(tags: readonly string[]): string {
+  return tags.map((t) => `#${t}`).join(' + ')
+}
+
+/** Tags back out of a `filterLabel`, or undefined when the label isn't one. */
+export function parseFilterLabel(label: string | undefined): string[] | undefined {
+  if (!label || !label.startsWith('#')) return undefined
+  const tags = label.split(' + ').map((part) => part.replace(/^#/, ''))
+  return tags.every((t) => t === normalizeTag(t) && t !== '') ? tags : undefined
+}
+
+/**
+ * The tags a badge draws before folding the rest into "+N". Active
+ * (filtered) tags always stay visible, so the reason a row is showing is
  * never hidden.
  */
-export function visibleTags(tags: string[], active: string | undefined, max: number): { shown: string[]; hidden: number } {
+export function visibleTags(tags: string[], active: readonly string[], max: number): { shown: string[]; hidden: number } {
   if (tags.length <= max) return { shown: tags, hidden: 0 }
-  let shown = tags.slice(0, max)
-  if (active && tags.includes(active) && !shown.includes(active)) {
-    shown = [...tags.slice(0, max - 1), active]
-  }
+  const pinned = tags.filter((t) => active.includes(t)).slice(0, max)
+  const rest = tags.filter((t) => !pinned.includes(t)).slice(0, max - pinned.length)
+  const keep = new Set([...pinned, ...rest])
+  const shown = tags.filter((t) => keep.has(t))
   return { shown, hidden: tags.length - shown.length }
 }
 
