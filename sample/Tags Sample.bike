@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8"/>
+  </head>
+  <body>
+    <ul id="rtSample">
+      <li id="s1">
+        <p>Tags Sample</p>
+        <ul>
+          <li id="s2"><p>Click a pill to show every row with that tag. Press Command-Shift-T on any row to add a tag.</p></li>
+        </ul>
+      </li>
+      <li id="a1">
+        <p>School</p>
+        <ul>
+          <li id="a2" data-type="task" data-tag="history">
+            <p>HIST 210 Modern Europe</p>
+            <ul>
+              <li id="a3" data-type="task" data-tag="reading, history"><p>Read chapter 4 on the 1848 revolutions</p></li>
+              <li id="a4" data-type="task" data-tag="assignment, history, writing"><p>Draft the response paper</p></li>
+              <li id="a5" data-type="task" data-done="2026-10-20T15:00:00Z" data-tag="reading, history"><p>Read chapter 3</p></li>
+              <li id="a6" data-type="task" data-tag="assignment, reading, history, writing, exam"><p>Annotate the primary sources for the midterm</p></li>
+            </ul>
+          </li>
+          <li id="a7">
+            <p>Reading list</p>
+            <ul>
+              <li id="a8" data-tag="reading"><p>A field guide to the archives</p></li>
+              <li id="a9" data-tag="reading, idea"><p>Essays on mapmaking</p></li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+      <li id="b1">
+        <p>Home</p>
+        <ul>
+          <li id="b2" data-type="task" data-tag="errand"><p>Pick up the bike from the shop</p></li>
+          <li id="b3" data-type="task" data-tag="idea, garden"><p>Sketch the raised bed layout</p></li>
+        </ul>
+      </li>
+      <li id="c1">
+        <p>Old inline tags (try Convert Hash Tags)</p>
+        <ul>
+          <li id="c2"><p>Call the library about the interlibrary loan #waiting</p></li>
+          <li id="c3"><p>#idea Podcast episode on local history #History</p></li>
+          <li id="c4"><p>Renew the parking permit (#errand)</p></li>
+        </ul>
+      </li>
+    </ul>
+  </body>
+</html>

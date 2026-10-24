@@ -1,0 +1,4 @@
+node_modules/
+out/
+*.bkext.zip
+.DS_Store
