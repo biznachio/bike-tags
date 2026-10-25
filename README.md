@@ -16,6 +16,7 @@ tag: assignment, reading, history
 - **Add Tag (⌘⇧T).** Type to pick from tags you already use, or type a new one. Separate tags with commas to add several at once. Works on several selected rows too.
 - **This row.** With a row selected, a card in the inspector shows its tags. Remove one with its ×, add one of your most-used tags in one click, or pick any other.
 - **Filter by tag.** Click tags in the inspector to select them; the outline shows rows that have all of them. Tags that never appear with your selection fade out. Click a selected tag to take it out.
+- **Find a tag.** Click the magnifier beside List and Map, or press ⌘F in the panel. As you type, the field fills in your most-used matching tag. Return adds it to the filter, Tab fills it in, and Esc closes the field.
 - **List or Map.** List shows each tag with a bar of its open and done rows. Map shows each tag against your busiest top-level rows, with the rest combined in one column, so you can see where it's used; click a cell to see that tag in one area.
 - **Hide done.** A switch beside the Tags heading leaves done and canceled rows out of everything Tags shows: filters, counts, the map and suggestions. Rows without a status, like notes, always stay.
 - **Conversion notice.** While inline #tags remain in your text, a yellow notice at the top of the inspector opens the Convert window.

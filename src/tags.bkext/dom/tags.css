@@ -201,12 +201,26 @@
   color: var(--secondary-label);
 }
 
-/* Search */
+/* Find */
 
-.rt-search {
+.rt-find {
+  position: relative;
+  margin: 0 0 8px;
+}
+
+.rt-search,
+.rt-find-ghost {
   width: 100%;
   box-sizing: border-box;
-  padding: 4px 8px;
+  height: 24px;
+  padding: 0 32px 0 26px;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: normal;
+}
+
+.rt-search {
+  position: relative;
   border: 0;
   border-radius: 6px;
   background: var(--rt-fill);
@@ -216,6 +230,68 @@
 
 .rt-search:focus {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--rt-accent) 45%, transparent);
+}
+
+/* The completion sits under a transparent copy of the typed text, behind the field's text. */
+.rt-find-ghost {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  white-space: pre;
+  overflow: hidden;
+  color: var(--tertiary-label, var(--secondary-label));
+  pointer-events: none;
+}
+
+.rt-find-typed {
+  visibility: hidden;
+}
+
+.rt-find-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  color: var(--secondary-label);
+  pointer-events: none;
+}
+
+.rt-find-key {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  font-size: 11px;
+  color: var(--tertiary-label, var(--secondary-label));
+  pointer-events: none;
+}
+
+.rt-find-button {
+  all: unset;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--secondary-label);
+}
+
+.rt-find-button:hover {
+  background: var(--rt-fill);
+}
+
+.rt-find-on,
+.rt-find-on:hover {
+  background: var(--rt-fill);
+  color: var(--rt-accent);
+}
+
+.rt-find-button:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--rt-accent) 55%, transparent);
 }
 
 /* List */
@@ -695,10 +771,6 @@
 
 .rt-pad {
   padding: 0 8px;
-}
-
-.rt-search {
-  margin-bottom: 8px;
 }
 
 /* Sections: a small heading above each card. */

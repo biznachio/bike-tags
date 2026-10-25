@@ -1,8 +1,9 @@
 import { DOMExtensionContext } from 'bike/dom'
 import { Disclosure, SFSymbol } from 'bike/components'
 import { createRoot } from 'react-dom/client'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as KeyEvent } from 'react'
 import './tags.css'
+import { completionFor, findTags, topMatch } from './find'
 import { OTHER_AREAS, PanelFilter, PanelHeatmap, PanelSelection, PanelState, PanelTag, TagsProtocol } from './protocols'
 
 // The inspector's Tags section. Each area has one job, and says so:
@@ -14,7 +15,6 @@ import { OTHER_AREAS, PanelFilter, PanelHeatmap, PanelSelection, PanelState, Pan
 
 const OPEN_KEY = 'panelOpen'
 const VIEW_KEY = 'filterView'
-const SEARCH_THRESHOLD = 14
 
 type Send = (message: TagsProtocol['toApp']) => void
 type View = 'list' | 'map'
@@ -196,27 +196,78 @@ function FilterCard({ filter, send }: { filter: PanelFilter; send: Send }) {
 // MARK: - Filter by tag
 
 function FilterByTag({ state, send, view, onView }: { state: PanelState; send: Send; view: View; onView: (v: View) => void }) {
+  const [finding, setFinding] = useState(false)
   const [query, setQuery] = useState('')
-  const shown = useMemo(() => {
-    const q = query.trim().replace(/^#/, '').toLowerCase()
-    return q ? state.tags.filter((t) => t.name.includes(q)) : state.tags
-  }, [state.tags, query])
+  const field = useRef<HTMLInputElement>(null)
+  const shown = useMemo(() => findTags(state.tags, query), [state.tags, query])
   const filtering = !!state.filter
+  const active = state.filter?.tags ?? []
+  const match = topMatch(shown, query, state.hideDone, (name) => !active.includes(name) && !isDim(state.filter, name))
+  const completion = completionFor(match, query)
 
-  const hint =
-    view === 'map'
+  const openFind = () => {
+    setFinding(true)
+    setTimeout(() => field.current?.focus(), 0)
+  }
+  const closeFind = () => {
+    setFinding(false)
+    setQuery('')
+  }
+
+  // ⌘F opens the field while the panel has focus.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        openFind()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  const onFieldKey = (e: KeyEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      closeFind()
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (match) {
+        send({ type: 'toggleFilterTag', tag: match.name })
+        setQuery('')
+      }
+    } else if ((e.key === 'Tab' && !e.shiftKey) || (e.key === 'ArrowRight' && e.currentTarget.selectionStart === query.length)) {
+      if (completion) {
+        e.preventDefault()
+        setQuery(query + completion)
+      }
+    }
+  }
+
+  const hint = finding
+    ? bike.localize('Return adds the top match to the filter. Esc closes the field.')
+    : view === 'map'
       ? filtering
         ? bike.localize('Faded tags never appear with the selected ones. Click a cell to narrow to one area.')
         : bike.localize('Click a tag to filter, or a cell to see that tag in one area.')
       : filtering
         ? bike.localize('Faded tags never appear with the selected ones.')
-        : bike.localize('Select tags to show rows that have all of them.')
+        : bike.localize('Click a tag to show its rows. Click more to narrow.')
 
   return (
     <section className="rt-section" aria-label={bike.localize('Filter by tag')}>
       <div className="rt-section-head">
         <span className="rt-card-label">{bike.localize('Filter by tag')}</span>
         <span className="rt-spacer" />
+        <button
+          className={finding ? 'rt-find-button rt-find-on' : 'rt-find-button'}
+          aria-label={bike.localize('Find a tag')}
+          aria-pressed={finding}
+          title={bike.localize('Find a tag (⌘F)')}
+          onClick={() => (finding ? closeFind() : openFind())}
+        >
+          <SFSymbol name="magnifyingglass" scale="small" />
+        </button>
         <div className="rt-segmented" role="radiogroup" aria-label={bike.localize('View')}>
           <button role="radio" aria-checked={view === 'list'} className={view === 'list' ? 'rt-seg rt-seg-on' : 'rt-seg'} onClick={() => onView('list')}>
             <SFSymbol name="list.bullet" scale="small" />
@@ -229,15 +280,28 @@ function FilterByTag({ state, send, view, onView }: { state: PanelState; send: S
         </div>
       </div>
 
-      {state.tags.length > SEARCH_THRESHOLD && (
-        <input
-          className="rt-search"
-          type="search"
-          placeholder={bike.localize('Find a tag')}
-          aria-label={bike.localize('Find a tag')}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
+      {finding && (
+        <div className="rt-find">
+          <SFSymbol className="rt-find-icon" name="magnifyingglass" scale="small" aria-hidden="true" />
+          <div className="rt-find-ghost" aria-hidden="true">
+            <span className="rt-find-typed">{query}</span>
+            {completion}
+          </div>
+          <input
+            ref={field}
+            className="rt-search"
+            type="text"
+            placeholder={bike.localize('Find a tag')}
+            aria-label={bike.localize('Find a tag')}
+            aria-describedby="rt-find-hint"
+            autoComplete="off"
+            spellCheck={false}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onFieldKey}
+          />
+          <span className="rt-find-key" aria-hidden="true">esc</span>
+        </div>
       )}
 
       {shown.length === 0 ? (
@@ -247,7 +311,7 @@ function FilterByTag({ state, send, view, onView }: { state: PanelState; send: S
       ) : (
         <Heatmap heatmap={state.heatmap} tags={shown} filter={state.filter} send={send} />
       )}
-      <p className="rt-hint">{hint}</p>
+      <p className="rt-hint" id="rt-find-hint">{hint}</p>
     </section>
   )
 }

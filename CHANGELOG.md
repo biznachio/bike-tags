@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.4 (2026-10-24)
+
+### New
+- Find a tag: a magnifier button beside List and Map opens a find field, or press ⌘F in the panel
+- Find works in both List and Map
+- Autocomplete: the field fills in the most-used matching tag in gray; Tab accepts it
+- Return adds the top match to the filter; Esc closes the field
+
+### Changed
+- The find field no longer appears on its own once you have 15 tags
+- Clearer hint under Filter by tag
+
 ## 0.0.3 (2026-10-24)
 
 ### New
