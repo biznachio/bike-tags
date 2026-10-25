@@ -3,6 +3,23 @@
 
 import { Row } from 'bike/app'
 import { combinedFilterPath, findHashTags, removalRanges, tagFilterPath } from '../app/tag-core'
+import { TagIndex } from '../app/tag-index'
+
+/** Edits a copy of the row's text, then assigns it; editing live text in place can crash Bike. */
+function appendText(row: Row, more: string) {
+  const live = row.text
+  const text = live.substring([0, live.count])
+  text.append(more)
+  row.text = text
+}
+
+async function eventually(check: () => boolean, timeoutMs = 3000): Promise<void> {
+  const start = Date.now()
+  while (!check()) {
+    if (Date.now() - start > timeoutMs) assert(false, 'condition not met within ' + timeoutMs + 'ms')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
 
 function rows(path: string): Row[] {
   const outline = bike.testOutline()
@@ -66,5 +83,56 @@ describe('tags', () => {
       row!.text = text
     })
     assert.equal(row!.text.string, 'Call the library')
+  })
+
+  it('the index follows tag, status and text edits', async () => {
+    const outline = bike.testOutline()
+    let area: Row | undefined
+    let a: Row | undefined
+    let note: Row | undefined
+    outline.transaction({ label: 'setup' }, () => {
+      area = outline.insertRows(['School'], outline.root)[0]
+      ;[a, note] = outline.insertRows(['Essay', 'Plain note'], area)
+      a.setAttribute('tag', 'assignment, history')
+    })
+    const index = new TagIndex(outline, () => {})
+    let heard = 0
+    index.subscribe(() => heard++)
+    try {
+      const first = index.tags()
+      assert.equal(first.rows.length, 1)
+      assert.equal(first.rows[0].area, area!.id)
+      assert.equal(first.areas[0].name, 'School')
+      assert.equal(index.hashTagRowCount(), 0)
+
+      // Typing in an untagged row leaves tag data alone and wakes no one.
+      outline.transaction({ label: 'type' }, () => {
+        appendText(note!, ' more')
+      })
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      assert(index.tags() === first, 'typing kept the snapshot')
+      assert.equal(heard, 0)
+
+      // Typing a #tag shows in the notice count.
+      outline.transaction({ label: 'type' }, () => {
+        appendText(note!, ' #later')
+      })
+      await eventually(() => index.hashTagRowCount() === 1)
+
+      // A status change on a tagged row rebuilds.
+      outline.transaction({ label: 'done' }, () => {
+        a!.setAttribute('status', 'done')
+      })
+      await eventually(() => index.tags().rows[0]?.closed === true)
+      assert(heard > 0, 'listeners heard the change')
+
+      // Removing the row drops it everywhere.
+      outline.transaction({ label: 'remove' }, () => {
+        outline.removeRows([note!])
+      })
+      await eventually(() => index.hashTagRowCount() === 0)
+    } finally {
+      index.dispose()
+    }
   })
 })

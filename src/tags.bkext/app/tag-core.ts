@@ -87,33 +87,6 @@ export interface TagCount {
   open?: number
 }
 
-/** Tag → number of rows carrying it, sorted by name. */
-export function countTags(wires: Iterable<string | undefined>): TagCount[] {
-  const counts = new Map<string, number>()
-  for (const wire of wires) {
-    for (const tag of parseTags(wire)) counts.set(tag, (counts.get(tag) ?? 0) + 1)
-  }
-  return [...counts.entries()]
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => a.name.localeCompare(b.name))
-}
-
-/** Like `countTags`, plus how many of each tag's rows are still open. */
-export function countTagsWithOpen(rows: Iterable<{ wire: string | undefined; closed: boolean }>): Required<TagCount>[] {
-  const counts = new Map<string, { count: number; open: number }>()
-  for (const { wire, closed } of rows) {
-    for (const tag of parseTags(wire)) {
-      const c = counts.get(tag) ?? { count: 0, open: 0 }
-      c.count += 1
-      if (!closed) c.open += 1
-      counts.set(tag, c)
-    }
-  }
-  return [...counts.entries()]
-    .map(([name, c]) => ({ name, count: c.count, open: c.open }))
-    .sort((a, b) => a.name.localeCompare(b.name))
-}
-
 // MARK: - Combined filters
 
 const OPEN_ONLY = 'not (@status = done or @status = canceled)'

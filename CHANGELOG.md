@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.0 (2026-10-24)
+
+### Changed
+- Faster inspector: Tags reads the outline once, then follows only what changed
+- Typing, moving between rows and checking off untagged tasks no longer recount every tag
+- The inline #tag notice rechecks only the rows you edit
+- Add Tag and the Attributes Editor suggest tags from the same cached counts
+- Narrowing a tag filter you already have no longer adds a step to Back history
+- The panel skips updates when nothing it shows changed
+
+### Fixed
+- Escape closes the find field while the panel has focus, even after you click away from the field
+- A failed panel action or update no longer stops later ones
+
 ## 0.0.4 (2026-10-24)
 
 ### New

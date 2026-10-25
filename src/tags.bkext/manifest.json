@@ -1,9 +1,9 @@
 {
   "$schema": "../../node_modules/@bike-outliner/extension-kit/schemas/manifest.schema.json",
-  "description": "Tags as a row attribute. Several tags per row as pills, a tag list in the inspector, one-click filtering, rename everywhere, and a one-time converter for inline #tags.",
+  "description": "Tags as a row attribute. Several tags per row as badges, an inspector panel to filter, find and map them, rename everywhere, and a one-time converter for inline #tags.",
   "author": "James Stewart",
   "url": "https://github.com/biznachio/bike-tags",
-  "version": "0.0.4",
+  "version": "1.0.0",
   "api_version": "0.76.1",
   "permissions": [],
   "host_permissions": []

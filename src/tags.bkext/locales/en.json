@@ -68,7 +68,7 @@
   "Tagged rows by area": "Tagged rows by area",
   "Tags": "Tags",
   "Tags are lowercased, so #Idea and #idea merge.": "Tags are lowercased, so #Idea and #idea merge.",
-  "Tags as a row attribute. Several tags per row as pills, a tag list in the inspector, one-click filtering, rename everywhere, and a one-time converter for inline #tags.": "Tags as a row attribute. Several tags per row as pills, a tag list in the inspector, one-click filtering, rename everywhere, and a one-time converter for inline #tags.",
+  "Tags as a row attribute. Several tags per row as badges, an inspector panel to filter, find and map them, rename everywhere, and a one-time converter for inline #tags.": "Tags as a row attribute. Several tags per row as badges, an inspector panel to filter, find and map them, rename everywhere, and a one-time converter for inline #tags.",
   "Tags for this row, separated by commas.": "Tags for this row, separated by commas.",
   "Tags on the selected rows": "Tags on the selected rows",
   "Tags: Add Tag": "Tags: Add Tag",

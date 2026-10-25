@@ -22,10 +22,7 @@ import {
   applyRemoval,
   canonicalWire,
   combinedFilterPath,
-  countTags,
-  countTagsWithOpen,
   filterLabel,
-  findHashTags,
   normalizeTag,
   parseFilterLabel,
   parseTags,
@@ -38,7 +35,9 @@ import {
   withTags,
   withoutTags,
 } from './tag-core'
-import { ConvertProtocol, OTHER_AREAS, PanelFilter, PanelHeatmap, PanelSelection, PanelState, TagsProtocol } from '../dom/protocols'
+import { ConvertProtocol, OTHER_AREAS, PanelFilter, PanelHeatmap, PanelSelection, PanelState, PanelTag, TagsProtocol } from '../dom/protocols'
+import { TagIndex, hashTagHits, indexFor } from './tag-index'
+import * as model from './panel-model'
 
 // Tags: tags as one `tag` row attribute holding a comma list.
 //
@@ -81,17 +80,21 @@ function rowsOf(outline: Outline, path: string): Row[] {
   return result.value.filter((item): item is Row => typeof (item as Row).getAttribute === 'function')
 }
 
-function taggedRows(outline: Outline): Row[] {
-  return rowsOf(outline, '//@tag')
-}
-
-function isClosed(row: Row): boolean {
-  const status = row.getAttribute('status')
-  return status === 'done' || status === 'canceled'
-}
-
+/** Every tag in the outline with its row count, alphabetical. Cached until the tags change. */
 function tagCounts(outline: Outline): TagCount[] {
-  return countTags(taggedRows(outline).map((row) => row.getAttribute(ATTR)))
+  return statsFor(indexFor(outline), false)
+}
+
+const statsCache = new WeakMap<TagIndex, { key: string; stats: PanelTag[] }>()
+
+function statsFor(index: TagIndex, hide: boolean): PanelTag[] {
+  const snapshot = index.tags()
+  const key = `${snapshot.version}:${hide}`
+  const cached = statsCache.get(index)
+  if (cached?.key === key) return cached.stats
+  const stats = model.tagStats(snapshot.rows, hide)
+  statsCache.set(index, { key, stats })
+  return stats
 }
 
 function rowsWithTag(outline: Outline, tag: string): Row[] {
@@ -100,25 +103,10 @@ function rowsWithTag(outline: Outline, tag: string): Row[] {
   return rowsOf(outline, tagFilterPath(t)).filter((row) => parseTags(row.getAttribute(ATTR)).includes(t))
 }
 
-/** Rows carrying every one of `tags`, done or not. */
-function rowsWithAll(outline: Outline, tags: string[]): Row[] {
-  return rowsOf(outline, combinedFilterPath(tags, false)).filter((row) => {
-    const have = parseTags(row.getAttribute(ATTR))
-    return tags.every((t) => have.includes(t))
-  })
-}
-
 function tagsOn(rows: Row[]): string[] {
   const all = new Set<string>()
   for (const row of rows) for (const tag of parseTags(row.getAttribute(ATTR))) all.add(tag)
   return [...all].sort((a, b) => a.localeCompare(b))
-}
-
-/** The top-level row a row sits under (itself, at the top level). */
-function areaOf(row: Row): Row | undefined {
-  let r: Row | undefined = row
-  while (r && r.parent && r.parent.parent) r = r.parent
-  return r && r.parent ? r : undefined
 }
 
 function rowsLabel(count: number): string {
@@ -339,18 +327,33 @@ function showPillMenu(editor: OutlineEditor, row: Row, key?: string) {
 
 type FilterState = { tags: string[]; hideDone: boolean; area?: Row }
 
+/** The last filter read, so the poll below skips parsing when nothing changed. */
+let lastFilter: { path: string; label?: string; tags?: string[]; hideDone: boolean } | undefined
+
+/** Which tags a filter shows, when it's one this extension set. */
+function ownFilter(filter: { path: string; label?: string } | undefined): { tags: string[]; hideDone: boolean } | undefined {
+  if (!filter) return undefined
+  if (lastFilter && lastFilter.path === filter.path && lastFilter.label === filter.label) {
+    return lastFilter.tags ? { tags: lastFilter.tags, hideDone: lastFilter.hideDone } : undefined
+  }
+  const tags = parseFilterLabel(filter.label)
+  let found: { tags: string[]; hideDone: boolean } | undefined
+  if (tags) {
+    for (const hd of [false, true]) if (filter.path === combinedFilterPath(tags, hd)) found = { tags, hideDone: hd }
+  }
+  lastFilter = { path: filter.path, label: filter.label, tags: found?.tags, hideDone: found?.hideDone ?? false }
+  return found
+}
+
 /** The filter this editor shows, when it's one this extension set. */
 function currentFilter(editor: OutlineEditor | undefined): FilterState | undefined {
-  const filter = editor?.filter
-  const tags = parseFilterLabel(filter?.label)
-  if (!editor || !filter || !tags) return undefined
-  for (const hd of [false, true]) {
-    if (filter.path !== combinedFilterPath(tags, hd)) continue
-    const focus = editor.focus
-    const area = focus.parent && !focus.parent.parent ? focus : undefined
-    return { tags, hideDone: hd, area }
-  }
-  return undefined
+  if (!editor) return undefined
+  const own = ownFilter(editor.filter)
+  if (!own) return undefined
+  const focus = editor.focus
+  const parent = focus.parent
+  const area = parent && !parent.parent ? focus : undefined
+  return { ...own, area }
 }
 
 /**
@@ -368,17 +371,21 @@ function applyFilter(editor: OutlineEditor, tags: string[], area?: Row) {
     setActive([])
     return
   }
-  if (rowsWithAll(editor.outline, clean).length === 0) {
+  if (model.rowsWithAll(indexFor(editor.outline).tags().rows, clean).length === 0) {
     editor.showStatusMessage(bike.localize('No rows are tagged {tags}', { tags: filterLabel(clean) }), 3)
     return
   }
   const label = filterLabel(clean)
+  const hide = hideDone()
+  // Narrowing a filter you already have stays one step in Back history.
+  const refining = !!currentFilter(editor)
   editor.transaction({ label: bike.localize('Show {tags}', { tags: label }), animate: { spring: 'navigation' } }, () => {
     editor.focus = area ?? editor.outline.root
     editor.filter = {
-      path: combinedFilterPath(clean, hideDone()),
+      path: combinedFilterPath(clean, hide),
       label,
-      emptyMessage: hideDone() ? bike.localize('No rows tagged {tags} are left once done rows are hidden', { tags: label }) : bike.localize('No rows are tagged {tags}', { tags: label }),
+      emptyMessage: hide ? bike.localize('No rows tagged {tags} are left once done rows are hidden', { tags: label }) : bike.localize('No rows are tagged {tags}', { tags: label }),
+      pushLocation: !refining,
     }
   })
   setActive(clean)
@@ -425,9 +432,17 @@ function setActive(tags: string[]) {
 
 // Bike has no filter observer; a light poll notices when the filter is
 // cleared or changed by other means (the filter field, Escape, navigation).
+// It reads only the filter, and parses it only when it changed.
 function watchFilter() {
-  setInterval(() => setActive(currentFilter(bike.frontmostOutlineEditor)?.tags ?? []), 750)
-  bike.observeFrontmostOutlineEditor((editor) => setActive(currentFilter(editor)?.tags ?? []))
+  const check = (editor: OutlineEditor | undefined) => {
+    try {
+      setActive(ownFilter(editor?.filter)?.tags ?? [])
+    } catch (error) {
+      console.error('Tags: filter check failed', error)
+    }
+  }
+  setInterval(() => check(bike.frontmostOutlineEditor), 750)
+  bike.observeFrontmostOutlineEditor(check)
 }
 
 // MARK: - Editing
@@ -539,35 +554,16 @@ async function renameTagFlow(editor: OutlineEditor, from: string) {
 
 // MARK: - Convert #tags
 
-type ConversionRow = { row: Row; hits: ReturnType<typeof findHashTags> }
+type ConversionRow = { row: Row; hits: ReturnType<typeof hashTagHits> }
 
-function isPlainTextAt(row: Row, index: number): boolean {
-  const text = row.text
-  return !text.attributeAt('code', index, 'downstream') && !text.attributeAt('a', index, 'downstream')
-}
-
-function hitsFor(row: Row): ConversionRow['hits'] {
-  if (row.type === 'code') return []
-  const string = row.text.string
-  if (string.indexOf('#') < 0) return []
-  // Skip #words inside inline code or links.
-  return findHashTags(string).filter((hit) => isPlainTextAt(row, hit.start))
-}
-
+/** Every row with inline #tags, in outline order. Uses the same rule as the notice, so the two agree. */
 function planConversion(outline: Outline): ConversionRow[] {
   const plan: ConversionRow[] = []
   for (const row of outline.root.descendants) {
-    const hits = hitsFor(row)
+    const hits = hashTagHits(row)
     if (hits.length > 0) plan.push({ row, hits })
   }
   return plan
-}
-
-/** Rows the Convert window would list: the same rule, so the notice and the window agree. */
-function countHashTagRows(outline: Outline): number {
-  let count = 0
-  for (const row of outline.root.descendants) if (hitsFor(row).length > 0) count++
-  return count
 }
 
 /** Converts the given rows, reading their text fresh so edits made meanwhile are respected. */
@@ -575,7 +571,7 @@ function convertRows(editor: OutlineEditor, rows: Row[]): number {
   let converted = 0
   editor.outline.transaction({ label: bike.localize('Convert #tags') }, () => {
     for (const row of rows) {
-      const hits = hitsFor(row)
+      const hits = hashTagHits(row)
       if (hits.length === 0) continue
       // Edit a copy, then assign it. `row.text` is the row's live text, and
       // assigning it back to itself crashes Bike (a Swift exclusivity conflict).
@@ -625,10 +621,13 @@ async function convertCommand({ editor }: CommandContext): Promise<boolean> {
         setTimeout(() => {
           handle.dispose()
           setTimeout(() => {
-            const rows = ids.map((id) => editor.outline.getRowById(id)).filter((row): row is Row => !!row)
-            const n = convertRows(editor, rows)
-            editor.showStatusMessage(bike.localize('Converted {rows}', { rows: rowsLabel(n) }), 4)
-            refreshPanels()
+            try {
+              const rows = ids.map((id) => editor.outline.getRowById(id)).filter((row): row is Row => !!row)
+              const n = convertRows(editor, rows)
+              editor.showStatusMessage(bike.localize('Converted {rows}', { rows: rowsLabel(n) }), 4)
+            } catch (error) {
+              console.error('Tags: convert failed', error)
+            }
           }, 0)
         }, 0)
         break
@@ -726,10 +725,14 @@ function registerKeybindings() {
 type PanelEntry = {
   window: Window
   handle: DOMScriptHandle<TagsProtocol>
-  /** The watched outline, by its root's persistent id (Row objects never compare equal). */
-  outlineKey?: string
+  /** The index the panel listens to, and its subscription. */
+  index?: TagIndex
   watches: Disposable[]
-  timer?: number
+  timer?: ReturnType<typeof setTimeout>
+  /** Everything but the selection, reused while the tags, filter and Hide done stay the same. */
+  cache?: { key: string; state: Omit<PanelState, 'selection'> }
+  /** The last state sent, to skip sending an identical one. */
+  sent?: string
 }
 
 const panels = new Set<PanelEntry>()
@@ -747,21 +750,30 @@ function registerInspector() {
     // Actions run on the next tick, after Bike finishes delivering the
     // message; editing from inside the delivery can trip Bike's exclusivity
     // checks (see the Convert window).
-    handle.onmessage = (message) => setTimeout(() => handlePanelMessage(entry, message), 0)
+    handle.onmessage = (message) =>
+      setTimeout(() => {
+        try {
+          handlePanelMessage(entry, message)
+        } catch (error) {
+          console.error(`Tags: panel action ${message.type} failed`, error)
+        }
+      }, 0)
 
     watchEditor(entry)
     window.observeCurrentOutlineEditor(() => watchEditor(entry))
     window.onClose(() => {
-      for (const w of entry.watches) w.dispose()
+      unwatch(entry)
       panels.delete(entry)
     })
   })
 }
 
 function handlePanelMessage(entry: PanelEntry, message: TagsProtocol['toApp']) {
-  const window = entry.window
-  const editor = window.currentOutlineEditor
-  if (message.type === 'ready') return push(entry)
+  if (message.type === 'ready') {
+    entry.sent = undefined
+    return push(entry)
+  }
+  const editor = entry.window.currentOutlineEditor
   if (!editor) return
   const rows = editor.selection?.rows ?? []
   switch (message.type) {
@@ -802,18 +814,31 @@ function handlePanelMessage(entry: PanelEntry, message: TagsProtocol['toApp']) {
   }
 }
 
-/** Follows the window's current editor: its outline's edits and its selection. */
-function watchEditor(entry: PanelEntry) {
-  const editor = entry.window.currentOutlineEditor
-  const key = editor?.outline.root.ensurePersistentId()
-  if (key && key === entry.outlineKey && entry.watches.length > 0) return
+function unwatch(entry: PanelEntry) {
   for (const w of entry.watches) w.dispose()
   entry.watches = []
-  entry.outlineKey = key
-  if (editor) {
+  entry.index = undefined
+  entry.cache = undefined
+  if (entry.timer !== undefined) clearTimeout(entry.timer)
+  entry.timer = undefined
+}
+
+/**
+ * Follows the window's current editor. The outline's index says when tags or
+ * inline #tags changed; plain typing elsewhere wakes nothing. A selection
+ * change only redoes the This row card.
+ */
+function watchEditor(entry: PanelEntry): void {
+  const editor = entry.window.currentOutlineEditor
+  const index = editor ? indexFor(editor.outline) : undefined
+  if (index && index === entry.index) return push(entry)
+  unwatch(entry)
+  if (editor && index) {
+    entry.index = index
     entry.watches.push(
-      editor.outline.observeChanges((change) => {
-        if (change.type === 'endTransaction' || change.type === 'reload') schedulePush(entry, 400)
+      index.subscribe(() => {
+        entry.cache = undefined
+        schedulePush(entry, 150)
       }),
       editor.observeSelection(() => schedulePush(entry, 0), 150)
     )
@@ -830,122 +855,82 @@ function schedulePush(entry: PanelEntry, delay: number) {
 }
 
 const SUGGESTIONS = 3
+const MAP_AREAS = 4
 
 function selectionState(editor: OutlineEditor, counts: TagCount[]): PanelSelection | undefined {
   const rows = editor.selection?.rows ?? []
   if (rows.length === 0) return undefined
-  const lists = rows.map((row) => parseTags(row.getAttribute(ATTR)))
-  const union = [...new Set(lists.flat())].sort((a, b) => a.localeCompare(b))
-  const all = union.filter((t) => lists.every((l) => l.includes(t)))
-  const some = union.filter((t) => !all.includes(t))
-  const text = rows[0].text.string.trim()
-  const suggest = [...counts]
-    .filter((t) => !all.includes(t.name))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-    .slice(0, SUGGESTIONS)
-    .map((t) => t.name)
-  return {
-    label: rows.length === 1 ? text || bike.localize('Untitled row') : rowsLabel(rows.length),
-    all,
-    some,
-    suggest,
-  }
+  const { all, some } = model.selectionTags(rows.map((row) => parseTags(row.getAttribute(ATTR))))
+  const label = rows.length === 1 ? rows[0].text.string.trim() || bike.localize('Untitled row') : rowsLabel(rows.length)
+  return { label, all, some, suggest: model.suggestions(counts, all, SUGGESTIONS) }
 }
 
-function filterState(editor: OutlineEditor): PanelFilter | undefined {
+function areaName(name: string): string {
+  return name || bike.localize('Untitled')
+}
+
+function filterState(editor: OutlineEditor, index: TagIndex): PanelFilter | undefined {
   const state = currentFilter(editor)
   if (!state) return undefined
-  let rows = rowsWithAll(editor.outline, state.tags)
-  if (state.hideDone) rows = rows.filter((row) => !isClosed(row))
-  const area = state.area
-  if (area) rows = rows.filter((row) => areaOf(row)?.id === area.id)
-  // Which other tags could still narrow this filter, and by how much.
-  const combinable: Record<string, number> = {}
-  for (const row of rows) {
-    for (const tag of parseTags(row.getAttribute(ATTR))) {
-      if (!state.tags.includes(tag)) combinable[tag] = (combinable[tag] ?? 0) + 1
-    }
-  }
+  const rows = model.rowsWithAll(index.tags().rows, state.tags, { area: state.area?.id, hideDone: state.hideDone })
   return {
-    combinable,
+    combinable: model.combinable(rows, state.tags),
     tags: state.tags,
     hideDone: state.hideDone,
-    area: state.area ? { id: String(state.area.id), name: state.area.text.string.trim() || bike.localize('Untitled') } : undefined,
+    area: state.area ? { id: String(state.area.id), name: areaName(state.area.text.string.trim()) } : undefined,
     rows: rows.length,
-    open: rows.filter((row) => !isClosed(row)).length,
+    open: rows.filter((row) => !row.closed).length,
   }
 }
 
-const MAP_AREAS = 4
-
-function heatmapState(outline: Outline, rows: Row[]): PanelHeatmap {
-  // Keyed by row id: Bike hands out a fresh Row object on every read, so
-  // objects never compare equal.
-  const byArea = new Map<number, Map<string, number>>()
-  const totals = new Map<number, number>()
-  for (const row of rows) {
-    const area = areaOf(row)
-    if (!area) continue
-    const counts = byArea.get(area.id) ?? new Map<string, number>()
-    for (const tag of parseTags(row.getAttribute(ATTR))) counts.set(tag, (counts.get(tag) ?? 0) + 1)
-    byArea.set(area.id, counts)
-    totals.set(area.id, (totals.get(area.id) ?? 0) + 1)
-  }
-  // The busiest few areas get their own columns, in outline order; the rest
-  // share one, so the map always fits the inspector.
-  const used = outline.root.children.filter((row) => byArea.has(row.id))
-  const busiest = new Set(
-    [...used]
-      .sort((a, b) => (totals.get(b.id) ?? 0) - (totals.get(a.id) ?? 0))
-      .slice(0, used.length > MAP_AREAS + 1 ? MAP_AREAS : MAP_AREAS + 1)
-      .map((row) => row.id)
+function heatmapState(index: TagIndex, hide: boolean): PanelHeatmap {
+  const { rows, areas } = index.tags()
+  return model.heatmap(
+    hide ? rows.filter((row) => !row.closed) : rows,
+    areas.map((a) => ({ id: a.id, name: areaName(a.name) })),
+    MAP_AREAS,
+    { id: OTHER_AREAS, label: (count) => bike.localize('+{count} more', { count }) }
   )
-  const shown = used.filter((row) => busiest.has(row.id))
-  const rest = used.filter((row) => !busiest.has(row.id))
-  const name = (row: Row) => row.text.string.trim() || bike.localize('Untitled')
-
-  const columns: PanelHeatmap['areas'] = shown.map((row) => ({ id: String(row.id), name: name(row) }))
-  if (rest.length > 0) {
-    columns.push({
-      id: OTHER_AREAS,
-      name: bike.localize('+{count} more', { count: rest.length }),
-      full: rest.map(name).join(', '),
-    })
-  }
-  const cells: Record<string, number[]> = {}
-  const add = (column: number, counts: Map<string, number>) => {
-    for (const [tag, n] of counts) {
-      cells[tag] ??= columns.map(() => 0)
-      cells[tag][column] += n
-    }
-  }
-  shown.forEach((row, i) => add(i, byArea.get(row.id)!))
-  for (const row of rest) add(columns.length - 1, byArea.get(row.id)!)
-  return { areas: columns, cells }
 }
 
-function push(entry: PanelEntry) {
-  const editor = entry.window.currentOutlineEditor
-  let state: PanelState
-  if (!editor) {
-    state = { hasOutline: false, hideDone: hideDone(), tags: [], heatmap: { areas: [], cells: {} }, hashTagRows: 0 }
-  } else {
-    // With Hide done on, done and canceled rows drop out of everything the
-    // panel shows: counts, bars, the map, suggestions and fading.
-    const hide = hideDone()
-    const rows = taggedRows(editor.outline).filter((row) => !hide || !isClosed(row))
-    const tags = countTagsWithOpen(rows.map((row) => ({ wire: row.getAttribute(ATTR), closed: isClosed(row) })))
-    state = {
-      hasOutline: true,
-      hideDone: hide,
-      tags,
-      selection: selectionState(editor, tags),
-      filter: filterState(editor),
-      heatmap: heatmapState(editor.outline, rows),
-      hashTagRows: countHashTagRows(editor.outline),
-    }
+/** The panel's state minus the selection: rebuilt only when tags, the filter or Hide done change. */
+function outlineState(entry: PanelEntry, editor: OutlineEditor, index: TagIndex): Omit<PanelState, 'selection'> {
+  // With Hide done on, done and canceled rows drop out of everything the
+  // panel shows: counts, bars, the map, suggestions and fading.
+  const hide = hideDone()
+  const filter = editor.filter
+  const focus = editor.focus.id
+  const key = `${index.tags().version}|${hide}|${filter?.path ?? ''}|${filter?.label ?? ''}|${focus}`
+  if (entry.cache?.key === key) return entry.cache.state
+  const state = {
+    hasOutline: true,
+    hideDone: hide,
+    tags: statsFor(index, hide),
+    filter: filterState(editor, index),
+    heatmap: heatmapState(index, hide),
+    hashTagRows: index.hashTagRowCount(),
   }
+  entry.cache = { key, state }
+  return state
+}
+
+function push(entry: PanelEntry): void {
   try {
+    const editor = entry.window.currentOutlineEditor
+    let state: PanelState
+    if (!editor || !entry.index || entry.index.isDead) {
+      // The window has an editor the panel isn't following yet (its outline
+      // closed, or the editor arrived unannounced): follow it.
+      if (editor) return watchEditor(entry)
+      state = { hasOutline: false, hideDone: hideDone(), tags: [], heatmap: { areas: [], cells: {} }, hashTagRows: 0 }
+    } else {
+      const base = outlineState(entry, editor, entry.index)
+      state = { ...base, selection: selectionState(editor, base.tags) }
+    }
+    // Arrowing between rows with the same tags sends nothing.
+    const json = JSON.stringify(state)
+    if (json === entry.sent) return
+    entry.sent = json
     entry.handle.postMessage({ type: 'state', state })
   } catch (error) {
     console.error('Tags: panel update failed', error)

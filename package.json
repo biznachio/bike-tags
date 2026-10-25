@@ -1,6 +1,6 @@
 {
   "name": "bike-tags",
-  "version": "0.0.4",
+  "version": "1.0.0",
   "description": "Tags extension for Bike 2",
   "scripts": {
     "build": "bike-ext build",

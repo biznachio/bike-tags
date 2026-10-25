@@ -214,12 +214,20 @@ function FilterByTag({ state, send, view, onView }: { state: PanelState; send: S
     setQuery('')
   }
 
-  // ⌘F opens the field while the panel has focus.
+  // While the panel has focus, ⌘F opens the field and Escape closes it, even
+  // after you've clicked away from the field.
+  const findingRef = useRef(finding)
+  findingRef.current = finding
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'f') {
+      if (e.defaultPrevented) return
+      const plain = !e.shiftKey && !e.altKey && !e.ctrlKey
+      if (e.metaKey && plain && e.key.toLowerCase() === 'f') {
         e.preventDefault()
         openFind()
+      } else if (!e.metaKey && plain && e.key === 'Escape' && findingRef.current) {
+        e.preventDefault()
+        closeFind()
       }
     }
     window.addEventListener('keydown', onKey)
