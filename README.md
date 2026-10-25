@@ -8,6 +8,8 @@ tag: assignment, reading, history
 
 **[Download the latest release](https://github.com/biznachio/bike-tags/releases/latest)**
 
+![Bike filtered to rows tagged history and reading, with the Tags panel in the inspector showing the filter, the tag list and an inline #tag notice](docs/screenshot.png)
+
 ## What it does
 
 - **Multiple tags per row.** A row can carry as many tags as you like, stored together in one `tag` attribute as a comma list, and each shows as its own badge.
@@ -15,13 +17,13 @@ tag: assignment, reading, history
 - **Click a tag** to show rows with that tag, remove it from the row, rename it everywhere, or add another tag.
 - **Add Tag (⌘⇧T).** Type to pick from tags you already use, or type a new one. Separate tags with commas to add several at once. Works on several selected rows too.
 - **This row.** With a row selected, a card in the inspector shows its tags. Remove one with its ×, add one of your most-used tags in one click, or pick any other.
-- **Filter by tag.** Click tags in the inspector to select them; the outline shows rows that have all of them. Tags that never appear with your selection fade out. Click a selected tag to take it out.
+- **Filter by tag.** Click tags in the inspector to select them; the outline shows rows that have all of them. Tags that never appear with your selection fade out. A card under "Showing rows with" lists the filter and its row count. Remove a tag with its ×, or click Clear filter.
 - **Find a tag.** Click the magnifier beside List and Map, or press ⌘F in the panel. As you type, the field fills in your most-used matching tag. Return adds it to the filter, Tab fills it in, and Esc closes the field.
 - **List or Map.** List shows each tag with a bar of its open and done rows. Map shows each tag against your busiest top-level rows, with the rest combined in one column, so you can see where it's used; click a cell to see that tag in one area.
 - **Hide done.** A switch beside the Tags heading leaves done and canceled rows out of everything Tags shows: filters, counts, the map and suggestions. Rows without a status, like notes, always stay.
-- **Conversion notice.** While inline #tags remain in your text, a yellow notice at the top of the inspector opens the Convert window.
 - **Rename everywhere.** Renaming to a tag you already use merges the two.
-- **Convert inline #tags.** If you've been writing `#tags` in your row text, the Convert window lists every row that has them, with a before-and-after preview. Check the rows to convert and leave the rest, like issue numbers or chat channels. You can undo it.
+- **Convert inline #tags.** While `#tags` remain in your row text, a yellow notice at the top of the inspector opens the Convert window. It lists every row that has them, with a before-and-after preview. Check the rows to convert and leave the rest, like issue numbers or chat channels. You can undo it.
+- **Fast on big outlines.** Tags reads your outline once, then follows only what changes, so typing and moving between rows stay quick.
 
 ## Install
 
@@ -71,7 +73,7 @@ The tag you're filtering on always uses the theme's accent color.
 ## Limits
 
 - Bike's sidebar only holds entries that point to a row, so the tag list lives in the inspector.
-- Bike doesn't tell extensions when a filter changes, so the extension checks a few times a second to keep the blue highlight in step.
+- Bike doesn't tell extensions when a filter changes, so the extension checks a few times a second to keep the highlighted badges in step.
 
 ## Build from source
 
